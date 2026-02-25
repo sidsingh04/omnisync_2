@@ -26,7 +26,6 @@ OmniSync 2 is a modern, real-time ticketing and support agent management system 
 - **Runtime**: Node.js
 - **API Framework**: Express.js
 - **Database**: MongoDB (with Mongoose ODM)
-- **WebSockets**: `ws` for real-time duplex communication
 - **Authentication Pipeline**: Passport.js (JWT Strategy), bcrypt
 
 ## Getting Started
