@@ -87,7 +87,7 @@ export default function AnalyticsTab() {
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="transparent" />
                                     ))}
                                 </Pie>
-                                <Tooltip contentStyle={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '8px', border: '1px solid var(--border-primary)', boxShadow: 'var(--shadow-md)', color: 'var(--text-primary)' }} />
+                                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid var(--border-primary)', boxShadow: 'var(--shadow-md)', color: '#000000' }} itemStyle={{ color: '#000000' }} />
                                 <Legend verticalAlign="bottom" height={36} iconType="circle" />
                             </PieChart>
                         </ResponsiveContainer>

@@ -9,13 +9,28 @@ interface AgentTabsProps {
 
 export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsProps) {
     const [activeTab, setActiveTab] = useState<'pending' | 'activity'>('pending');
+
+    // Pending Tickets search (client-side)
     const [searchQuery, setSearchQuery] = useState('');
+
+    // History Tickets search (server-side via regex)
+    const [historySearchQuery, setHistorySearchQuery] = useState('');
+    const [debouncedHistorySearch, setDebouncedHistorySearch] = useState('');
 
     // Pagination State for History
     const [historyPage, setHistoryPage] = useState(1);
     const [totalHistoryPages, setTotalHistoryPages] = useState(1);
     const [paginatedHistory, setPaginatedHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+    // Debounce history search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedHistorySearch(historySearchQuery);
+            setHistoryPage(1); // Reset page on new search
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [historySearchQuery]);
 
     // Fetch Paginated History
     useEffect(() => {
@@ -24,10 +39,17 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
         const fetchPaginatedHistory = async () => {
             setIsLoadingHistory(true);
             try {
-                const res = await axios.get(`http://localhost:3000/api/ticket/get-paginated-history?agentId=${agent.agentId}&page=${historyPage}&limit=5`);
+                const res = await axios.get(`http://localhost:3000/api/ticket/get-paginated-history`, {
+                    params: {
+                        agentId: agent.agentId,
+                        page: historyPage,
+                        limit: 5,
+                        search: debouncedHistorySearch
+                    }
+                });
                 if (res.data.success) {
                     setPaginatedHistory(res.data.tickets);
-                    setTotalHistoryPages(res.data.pagination.totalPages);
+                    setTotalHistoryPages(res.data.pagination.totalPages || 1);
                 }
             } catch (error) {
                 console.error("Failed to fetch history page", error);
@@ -37,8 +59,7 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
         };
 
         fetchPaginatedHistory();
-    }, [agent?.agentId, historyPage]);
-
+    }, [agent?.agentId, historyPage, debouncedHistorySearch]);
 
     const pendingTickets = useMemo(() => {
         return tickets?.filter(t => t.status === 'pending') || [];
@@ -53,7 +74,6 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
     const resolvedTickets = useMemo(() => {
         return tickets?.filter(t => t.status === 'resolved') || [];
     }, [tickets]);
-
 
     const filteredPending = useMemo(() => {
         if (!searchQuery) return pendingTickets;
@@ -93,53 +113,55 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
     };
 
     return (
-        <div className="flex-1 overflow-y-auto flex flex-col gap-6">
+        <div className="flex-1 flex gap-6 overflow-hidden h-full">
 
-            {/* Search Bar */}
-            <div className="sticky top-0 z-20 bg-[var(--bg-primary)] pt-6 pb-2 -mt-6">
-                <div className="relative max-w-[600px]">
-                    <input
-                        type="text"
-                        placeholder="Search tickets by ID, subject"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full py-3 px-4 pl-10 border border-[var(--border-secondary)] rounded-lg text-[0.95rem] outline-none transition-colors focus:border-[var(--accent-primary)] focus:ring-4 focus:ring-[var(--accent-primary)]/10 bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] shadow-sm"
-                    />
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                        🔍
-                    </span>
-                </div>
-            </div>
-
-            {/* Tabs Navigation */}
-            <div className="flex gap-4 border-b-2 border-gray-200 relative">
+            {/* Left Sidebar Navigation */}
+            <div className="w-[220px] shrink-0 flex flex-col gap-2 border-r border-[#e5e7eb] pr-4 h-full">
                 <button
                     onClick={() => setActiveTab('pending')}
-                    className={`pb-3 px-4 text-base font-medium relative top-[2px] border-b-2 transition-all cursor-pointer ${activeTab === 'pending'
-                        ? 'text-[var(--accent-primary)] border-[var(--accent-primary)]'
-                        : 'text-[var(--text-secondary)] border-transparent hover:text-[var(--text-primary)]'
+                    className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm cursor-pointer ${activeTab === 'pending'
+                        ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] font-bold'
+                        : 'text-[var(--text-secondary)] hover:bg-gray-100 hover:text-[var(--text-primary)]'
                         }`}
                 >
-                    Pending Tickets
-                    <span className={`ml-2 text-xs py-0.5 px-2 rounded-xl text-white ${activeTab === 'pending' ? 'bg-[var(--accent-primary)]' : 'bg-[var(--text-muted)]'}`}>
+                    <span>Pending Tickets</span>
+                    <span className={`text-xs py-0.5 px-2 rounded-full font-bold ${activeTab === 'pending' ? 'bg-[var(--accent-primary)] text-white' : 'bg-gray-200 text-gray-600'}`}>
                         {pendingTickets.length}
                     </span>
                 </button>
+
                 <button
                     onClick={() => setActiveTab('activity')}
-                    className={`pb-3 px-4 text-base font-medium relative top-[2px] border-b-2 transition-all cursor-pointer ${activeTab === 'activity'
-                        ? 'text-[var(--accent-primary)] border-[var(--accent-primary)]'
-                        : 'text-[var(--text-secondary)] border-transparent hover:text-[var(--text-primary)]'
+                    className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm cursor-pointer ${activeTab === 'activity'
+                        ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] font-bold'
+                        : 'text-[var(--text-secondary)] hover:bg-gray-100 hover:text-[var(--text-primary)]'
                         }`}
                 >
-                    Activity & History
+                    <span>Activity & History</span>
                 </button>
             </div>
 
-            {/* Tab Contents */}
-            <div className="flex-col gap-6 flex">
+            {/* Main Content Area */}
+            <div className="flex-1 overflow-y-auto pr-2 pb-4 flex flex-col gap-6">
+
                 {activeTab === 'pending' && (
                     <div className="flex flex-col gap-4">
+                        {/* Pending search bar */}
+                        <div className="sticky top-0 z-10 bg-[var(--bg-primary)] pb-4 -mt-2">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search pending tickets by ID, subject"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full py-2.5 px-4 pl-10 border border-[var(--border-secondary)] rounded-lg text-[0.9rem] outline-none transition-colors focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-primary)]/10 bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] shadow-sm"
+                                />
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[1.1rem]">
+                                    🔍
+                                </span>
+                            </div>
+                        </div>
+
                         {filteredPending.length > 0 ? (
                             filteredPending.map(t => renderTicketCard(t, 'pending'))
                         ) : (
@@ -152,54 +174,80 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
 
                 {activeTab === 'activity' && (
                     <div className="flex flex-col gap-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div className="bg-[var(--bg-card)] p-6 rounded-xl shadow-sm border border-[var(--border-primary)] flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl bg-emerald-100 text-emerald-500">✓</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="bg-[var(--bg-card)] p-5 rounded-xl shadow-sm border border-[var(--border-primary)] flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl bg-emerald-100 text-emerald-500">✓</div>
                                 <div className="flex flex-col">
-                                    <span className="text-2xl font-bold text-[var(--text-primary)]">{resolvedTickets.length}</span>
-                                    <span className="text-sm text-[var(--text-secondary)]">Resolved Tickets</span>
+                                    <span className="text-xl font-bold text-[var(--text-primary)]">{resolvedTickets.length}</span>
+                                    <span className="text-[0.8rem] text-[var(--text-secondary)]">Resolved</span>
                                 </div>
                             </div>
-                            <div className="bg-[var(--bg-card)] p-6 rounded-xl shadow-sm border border-[var(--border-primary)] flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl bg-orange-50 text-orange-500">⏳</div>
+                            <div className="bg-[var(--bg-card)] p-5 rounded-xl shadow-sm border border-[var(--border-primary)] flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl bg-orange-50 text-orange-500">⏳</div>
                                 <div className="flex flex-col">
-                                    <span className="text-2xl font-bold text-[var(--text-primary)]">{pendingTickets.length}</span>
-                                    <span className="text-sm text-[var(--text-secondary)]">Pending Tickets</span>
+                                    <span className="text-xl font-bold text-[var(--text-primary)]">{pendingTickets.length}</span>
+                                    <span className="text-[0.8rem] text-[var(--text-secondary)]">Pending</span>
+                                </div>
+                            </div>
+                            <div className="bg-[var(--bg-card)] p-5 rounded-xl shadow-sm border border-[var(--border-primary)] flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl bg-blue-50 text-blue-500">📝</div>
+                                <div className="flex flex-col">
+                                    <span className="text-xl font-bold text-[var(--text-primary)]">{approvalTickets.length}</span>
+                                    <span className="text-[0.8rem] text-[var(--text-secondary)]">Approval</span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="mt-4 pb-2 border-b border-gray-200 text-gray-500 text-sm uppercase tracking-wider font-semibold">
-                            Approvals Sent to Supervisor
-                        </div>
-                        <div className="flex flex-col gap-4">
-                            {approvalTickets.length > 0 ? (
-                                approvalTickets.map(t => renderTicketCard(t, 'approval'))
-                            ) : (
-                                <div className="text-center p-8 text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-lg border border-[var(--border-secondary)] shadow-sm">No pending approvals</div>
-                            )}
+                        {approvalTickets.length > 0 && (
+                            <>
+                                <div className="mt-2 pb-2 border-b border-gray-200 text-gray-500 text-xs uppercase tracking-wider font-bold">
+                                    Approvals Sent to Supervisor
+                                </div>
+                                <div className="flex flex-col gap-3">
+                                    {approvalTickets.map(t => renderTicketCard(t, 'approval'))}
+                                </div>
+                            </>
+                        )}
+
+                        <div className="mt-2 pb-2 border-b border-gray-200 text-gray-500 text-xs uppercase tracking-wider font-bold flex justify-between items-center">
+                            <span>Ticket History</span>
                         </div>
 
-                        <div className="mt-4 pb-2 border-b border-gray-200 text-gray-500 text-sm uppercase tracking-wider font-semibold">
-                            Ticket History
+                        {/* History search bar */}
+                        <div className="sticky top-0 z-10 bg-[var(--bg-primary)] pb-2 -mt-2">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search history by ID, subject, or status"
+                                    value={historySearchQuery}
+                                    onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                    className="w-full py-2.5 px-4 pl-10 border border-[var(--border-secondary)] rounded-lg text-[0.9rem] outline-none transition-colors focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-primary)]/10 bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] shadow-sm"
+                                />
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[1.1rem]">
+                                    🔍
+                                </span>
+                            </div>
                         </div>
-                        <div className="flex flex-col gap-4">
+
+                        <div className="flex flex-col gap-3 min-h-[300px]">
                             {isLoadingHistory ? (
-                                <div className="text-center p-8 text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-lg border border-[var(--border-secondary)] shadow-sm">Loading history...</div>
+                                <div className="text-center p-8 text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-lg border border-[var(--border-secondary)] shadow-sm flex-1 flex items-center justify-center">Loading history...</div>
                             ) : paginatedHistory.length > 0 ? (
                                 paginatedHistory.map(t => renderTicketCard(t, 'history'))
                             ) : (
-                                <div className="text-center p-8 text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-lg border border-[var(--border-secondary)] shadow-sm">No history available</div>
+                                <div className="text-center p-8 text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-lg border border-[var(--border-secondary)] shadow-sm flex-1 flex items-center justify-center">
+                                    {debouncedHistorySearch ? 'No history matched your search' : 'No history available'}
+                                </div>
                             )}
                         </div>
 
                         {/* Pagination Controls */}
-                        {totalHistoryPages > 1 && (
-                            <div className="flex justify-between items-center px-4 py-3 bg-[var(--bg-card)] border border-[var(--border-secondary)] rounded-lg mt-2 shadow-[var(--shadow-sm)]">
+                        {!isLoadingHistory && totalHistoryPages > 1 && (
+                            <div className="flex justify-between items-center px-4 py-3 bg-[var(--bg-card)] border border-[var(--border-secondary)] rounded-lg shadow-[var(--shadow-sm)]">
                                 <button
-                                    disabled={historyPage === 1 || isLoadingHistory}
+                                    disabled={historyPage === 1}
                                     onClick={() => setHistoryPage(prev => prev - 1)}
-                                    className="px-4 py-2 bg-[var(--bg-tertiary)] border border-[var(--border-secondary)] rounded-md text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] disabled:opacity-50 cursor-pointer transition-colors"
+                                    className="px-4 py-2 text-sm font-medium bg-[var(--bg-tertiary)] border border-[var(--border-secondary)] rounded-md text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] disabled:opacity-50 cursor-pointer transition-colors"
                                 >
                                     Previous
                                 </button>
@@ -207,9 +255,9 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
                                     Page {historyPage} of {totalHistoryPages || 1}
                                 </span>
                                 <button
-                                    disabled={historyPage >= totalHistoryPages || isLoadingHistory}
+                                    disabled={historyPage >= totalHistoryPages}
                                     onClick={() => setHistoryPage(prev => prev + 1)}
-                                    className="px-4 py-2 bg-[var(--bg-tertiary)] border border-[var(--border-secondary)] rounded-md text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] disabled:opacity-50 cursor-pointer transition-colors"
+                                    className="px-4 py-2 text-sm font-medium bg-[var(--bg-tertiary)] border border-[var(--border-secondary)] rounded-md text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] disabled:opacity-50 cursor-pointer transition-colors"
                                 >
                                     Next
                                 </button>

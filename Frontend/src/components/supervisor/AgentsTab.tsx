@@ -18,6 +18,7 @@ export default function AgentsTab() {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
+    const [isFetching, setIsFetching] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
     const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
     const [metrics, setMetrics] = useState({
@@ -31,6 +32,7 @@ export default function AgentsTab() {
 
     const fetchAgents = async (isBackgroundLoad = false) => {
         if (!isBackgroundLoad) setIsLoading(true);
+        setIsFetching(true);
         try {
             const token = localStorage.getItem('token');
             const res = await axios.get('http://localhost:3000/api/agent/getPaginatedAgents', {
@@ -49,6 +51,7 @@ export default function AgentsTab() {
             console.error("Error fetching agents:", error);
         } finally {
             if (!isBackgroundLoad) setIsLoading(false);
+            setIsFetching(false);
             setIsSearching(false);
         }
     };
@@ -199,9 +202,9 @@ export default function AgentsTab() {
                                     </tr>
                                 ) : (
                                     <>
-                                        {/* Optional background overlay while searching */}
-                                        {isSearching && (
-                                            <tr className="absolute inset-0 bg-[var(--bg-card)]/40 z-10 transition-opacity pointer-events-none"></tr>
+                                        {/* Optional background overlay while searching or fetching */}
+                                        {(isSearching || isFetching) && !isLoading && (
+                                            <tr className="absolute inset-0 bg-[var(--bg-card)]/40 z-10 transition-opacity pointer-events-none backdrop-blur-[1px]"></tr>
                                         )}
                                         {agents.length > 0 ? (
                                             agents.map(agent => (
@@ -271,15 +274,15 @@ export default function AgentsTab() {
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                    disabled={currentPage === 1}
-                                    className="px-4 py-2 text-sm font-medium text-[var(--text-primary)] bg-[var(--bg-card)] border border-[var(--border-secondary)] rounded-lg hover:bg-[var(--bg-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    disabled={currentPage === 1 || isFetching}
+                                    className="px-4 py-2 text-sm font-medium text-[var(--text-primary)] bg-[var(--bg-card)] border border-[var(--border-secondary)] rounded-lg hover:bg-[var(--bg-secondary)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all"
                                 >
                                     Previous
                                 </button>
                                 <button
                                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                    disabled={currentPage === totalPages}
-                                    className="px-4 py-2 text-sm font-medium text-[var(--text-primary)] bg-[var(--bg-card)] border border-[var(--border-secondary)] rounded-lg hover:bg-[var(--bg-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    disabled={currentPage === totalPages || isFetching}
+                                    className="px-4 py-2 text-sm font-medium text-[var(--text-primary)] bg-[var(--bg-card)] border border-[var(--border-secondary)] rounded-lg hover:bg-[var(--bg-secondary)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all"
                                 >
                                     Next
                                 </button>

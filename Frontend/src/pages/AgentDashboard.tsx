@@ -13,6 +13,7 @@ export default function AgentDashboard() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTicket, setSelectedTicket] = useState<any>(null);
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(true);
 
     const loadDashboardData = async () => {
         try {
@@ -73,7 +74,10 @@ export default function AgentDashboard() {
                     tickets={tickets}
                     onTicketClick={(ticket: any) => setSelectedTicket(ticket)}
                 />
-                <AgentNotifications />
+                <AgentNotifications
+                    isOpen={isNotificationsOpen}
+                    onToggle={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                />
             </main>
 
             <TicketDetailsModal

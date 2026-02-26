@@ -141,6 +141,7 @@ async function getPaginatedHistory(req, res) {
         const agentId = req.query.agentId;
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 5;
+        const search = req.query.search || "";
 
         if (!agentId) {
             return res.status(400).json({
@@ -151,14 +152,23 @@ async function getPaginatedHistory(req, res) {
 
         const skip = (page - 1) * limit;
 
+        let query = { agentId };
+        if (search) {
+            query.$or = [
+                { issueId: { $regex: search, $options: 'i' } },
+                { code: { $regex: search, $options: 'i' } },
+                { status: { $regex: search, $options: 'i' } }
+            ];
+        }
+
         // Fetch tickets, sorted by issueDate (newest first)
-        const tickets = await Ticket.find({ agentId })
+        const tickets = await Ticket.find(query)
             .sort({ issueDate: -1 })
             .skip(skip)
             .limit(limit);
 
         // Get total count for this agent to calculate total pages
-        const totalTickets = await Ticket.countDocuments({ agentId });
+        const totalTickets = await Ticket.countDocuments(query);
         const totalPages = Math.ceil(totalTickets / limit);
 
         return res.json({
