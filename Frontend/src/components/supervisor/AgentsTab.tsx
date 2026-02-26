@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import AgentDetailsModal from './AgentDetailsModal';
 
@@ -17,12 +17,22 @@ export default function AgentsTab() {
     const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+    const [metrics, setMetrics] = useState({
+        total: 0,
+        available: 0,
+        break: 0,
+        offline: 0,
+        busy: 0
+    });
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const fetchAgents = async () => {
         setIsLoading(true);
         try {
-            const res = await axios.get('http://localhost:3000/api/agent/getAllAgents');
+            const token = localStorage.getItem('token');
+            const res = await axios.get('http://localhost:3000/api/agent/getAllAgents', {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
             if (res.data.success) {
                 setAgents(res.data.agents);
             }
@@ -33,8 +43,23 @@ export default function AgentsTab() {
         }
     };
 
+    const fetchMetrics = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.get('http://localhost:3000/api/analytics/agent-status-metrics', {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            if (res.data.success) {
+                setMetrics(res.data.metrics);
+            }
+        } catch (error) {
+            console.error("Error fetching agent metrics:", error);
+        }
+    };
+
     useEffect(() => {
         fetchAgents();
+        fetchMetrics();
     }, []);
 
     // Debounce search query
@@ -47,17 +72,6 @@ export default function AgentsTab() {
             clearTimeout(timer);
         };
     }, [searchQuery]);
-
-    // Derived Metrics
-    const metrics = useMemo(() => {
-        return {
-            total: agents.length,
-            available: agents.filter(a => a.status === 'Available').length,
-            break: agents.filter(a => a.status === 'Break').length,
-            offline: agents.filter(a => a.status === 'Offline').length,
-            busy: agents.filter(a => a.status === 'Busy').length
-        };
-    }, [agents]);
 
     // Filtering
     const filteredAgents = useMemo(() => {

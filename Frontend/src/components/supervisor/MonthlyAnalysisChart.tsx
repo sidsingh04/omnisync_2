@@ -1,88 +1,55 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 
-interface Ticket {
-    issueId: string;
-    code: string;
-    status: string;
-    issueDate: string;
-    resolvedDate?: string | null;
-}
+export default function MonthlyAnalysisChart() {
+    const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+    const [selectedMonth, setSelectedMonth] = useState<string>('');
+    const [chartData, setChartData] = useState<any[]>([]);
 
-interface MonthlyAnalysisChartProps {
-    tickets: Ticket[];
-}
-
-export default function MonthlyAnalysisChart({ tickets }: MonthlyAnalysisChartProps) {
-    const availableMonths = useMemo(() => {
-        const months = new Set<string>();
-        tickets.forEach(t => {
-            if (t.issueDate) {
-                const d = new Date(t.issueDate);
-                if (!isNaN(d.getTime())) {
-                    months.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    useEffect(() => {
+        const fetchMonths = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await axios.get('http://localhost:3000/api/analytics/available-months', {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+                if (res.data.success) {
+                    const months = res.data.availableMonths;
+                    setAvailableMonths(months);
+                    if (months.length > 0) {
+                        setSelectedMonth(months[0]);
+                    } else {
+                        const now = new Date();
+                        setSelectedMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+                    }
                 }
+            } catch (error) {
+                console.error("Failed to load available months", error);
             }
-            if (t.resolvedDate) {
-                const d = new Date(t.resolvedDate);
-                if (!isNaN(d.getTime())) {
-                    months.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+        };
+        fetchMonths();
+    }, []);
+
+    useEffect(() => {
+        if (!selectedMonth) return;
+        const fetchMonthlyData = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await axios.get(`http://localhost:3000/api/analytics/monthly-data?month=${selectedMonth}`, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+                if (res.data.success) {
+                    setChartData(res.data.days);
                 }
+            } catch (error) {
+                console.error("Failed to load monthly data", error);
             }
-        });
-        const sortedMonths = Array.from(months).sort().reverse();
-        return sortedMonths;
-    }, [tickets]);
-
-    const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-        if (availableMonths.length > 0) return availableMonths[0];
-        const now = new Date();
-        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    });
-
-    // Update selected month if it's empty and availableMonths populates
-    React.useEffect(() => {
-        if (availableMonths.length > 0 && !availableMonths.includes(selectedMonth)) {
-            setSelectedMonth(availableMonths[0]);
-        }
-    }, [availableMonths, selectedMonth]);
-
-    const chartData = useMemo(() => {
-        if (!selectedMonth) return [];
-        const [yearStr, monthStr] = selectedMonth.split('-');
-        if (!yearStr || !monthStr) return [];
-        const year = parseInt(yearStr, 10);
-        const month = parseInt(monthStr, 10) - 1;
-
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-        const days = Array.from({ length: daysInMonth }, (_, i) => ({
-            day: String(i + 1),
-            raised: 0,
-            resolved: 0
-        }));
-
-        tickets.forEach(ticket => {
-            if (ticket.issueDate) {
-                const d = new Date(ticket.issueDate);
-                if (d.getFullYear() === year && d.getMonth() === month) {
-                    const dayObj = days[d.getDate() - 1];
-                    if (dayObj) dayObj.raised++;
-                }
-            }
-            if (ticket.status === 'resolved' && ticket.resolvedDate) {
-                const d = new Date(ticket.resolvedDate);
-                if (d.getFullYear() === year && d.getMonth() === month) {
-                    const dayObj = days[d.getDate() - 1];
-                    if (dayObj) dayObj.resolved++;
-                }
-            }
-        });
-
-        return days;
-    }, [tickets, selectedMonth]);
+        };
+        fetchMonthlyData();
+    }, [selectedMonth]);
 
     const formatMonthLabel = (monthString: string) => {
         if (!monthString) return '';

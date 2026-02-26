@@ -1,69 +1,38 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend
 } from 'recharts';
 import MonthlyAnalysisChart from './MonthlyAnalysisChart';
 
-interface Ticket {
-    issueId: string;
-    code: string;
-    status: string;
-    issueDate: string;
-    resolvedDate?: string | null;
-}
+
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
 export default function AnalyticsTab() {
-    const [tickets, setTickets] = useState<Ticket[]>([]);
+    const [metrics, setMetrics] = useState({ resolved: 0, pending: 0, approval: 0, distinctErrors: 0 });
+    const [issueTypesData, setIssueTypesData] = useState<{ name: string, value: number }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const fetchTickets = async () => {
+        const fetchMetrics = async () => {
             try {
-                const res = await axios.get('http://localhost:3000/api/ticket/get-all');
+                const token = localStorage.getItem('token');
+                const res = await axios.get('http://localhost:3000/api/analytics/metrics', {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
                 if (res.data.success) {
-                    setTickets(res.data.tickets);
+                    setMetrics(res.data.metrics);
+                    setIssueTypesData(res.data.issueTypesData);
                 }
             } catch (error) {
-                console.error("Failed to load analytics data", error);
+                console.error("Failed to load analytics metrics", error);
             } finally {
                 setIsLoading(false);
             }
         };
-        fetchTickets();
+        fetchMetrics();
     }, []);
-
-    // Summary Metrics
-    const metrics = useMemo(() => {
-        let resolved = 0;
-        let pending = 0;
-        let approval = 0;
-        const uniqueErrors = new Set();
-
-        tickets.forEach(t => {
-            if (t.status === 'resolved') resolved++;
-            if (t.status === 'pending') pending++;
-            if (t.status === 'approval') approval++;
-            if (t.code) uniqueErrors.add(t.code);
-        });
-
-        return { resolved, pending, approval, distinctErrors: uniqueErrors.size };
-    }, [tickets]);
-
-    // Format Data for Issue Types (Pie/Bar Chart)
-    const issueTypesData = useMemo(() => {
-        const types: Record<string, number> = {};
-        tickets.forEach(ticket => {
-            const code = ticket.code || 'Unknown';
-            types[code] = (types[code] || 0) + 1;
-        });
-        return Object.entries(types)
-            .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5); // Top 5
-    }, [tickets]);
 
     const MetricCard = ({ title, value, icon, colorClass }: any) => (
         <div className="bg-[var(--bg-card)] p-6 rounded-xl shadow-[var(--shadow-sm)] border border-[var(--border-primary)] flex items-center justify-between transition-shadow hover:shadow-[var(--shadow-md)]">
@@ -94,7 +63,7 @@ export default function AnalyticsTab() {
 
             {/* Monthly Analysis */}
             <div className="w-full">
-                <MonthlyAnalysisChart tickets={tickets} />
+                <MonthlyAnalysisChart />
             </div>
 
             {/* Charts Row 2 */}
@@ -114,7 +83,7 @@ export default function AnalyticsTab() {
                                     paddingAngle={5}
                                     dataKey="value"
                                 >
-                                    {issueTypesData.map((entry, index) => (
+                                    {issueTypesData.map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="transparent" />
                                     ))}
                                 </Pie>
