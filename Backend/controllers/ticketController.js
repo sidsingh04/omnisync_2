@@ -1,15 +1,24 @@
 // API's related to Tickets
 
 const Ticket = require("../models/Tickets");
+const Agent = require("../models/Agent");
 
 async function createTicket(req, res) {
     try {
         const { issueId, code, description, agentId, status, issueDate } = req.body;
+
+        // Find the agent to get their ObjectId
+        const agent = await Agent.findOne({ agentId });
+        if (!agent) {
+            return res.status(404).json({ success: false, message: "Agent not found" });
+        }
+
         const ticket = new Ticket({
             issueId,
             code,
             description,
             agentId,
+            agent: agent._id, 
             status: status || 'pending',
             issueDate: issueDate || new Date(),
             remarks: req.body.remarks || "Initial ticket creation"
@@ -38,7 +47,7 @@ async function getTicketById(req, res) {
 
 async function updateTicket(req, res) {
     try {
-        const { issueId, _id, __v, ...updateFields } = req.body;
+        const { issueId, _id, __v, agentId, agent, ...updateFields } = req.body;
         const ticket = await Ticket.findOneAndUpdate({ issueId }, { $set: updateFields }, { new: true, runValidators: true });
         if (!ticket) {
             return res.status(404).json({ success: false, message: "Ticket not found" });

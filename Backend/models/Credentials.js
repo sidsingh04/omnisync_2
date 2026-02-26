@@ -2,7 +2,12 @@ const mongoose = require("mongoose");
 
 const agentCredentialsSchema = new mongoose.Schema({
     agentId: { type: String, required: true },
-    password: { type: String, required: true }
+    password: { type: String, required: true },
+    agent:{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Agent",
+        required: true,
+    }
 });
 
 const superCredentialsSchema = new mongoose.Schema({

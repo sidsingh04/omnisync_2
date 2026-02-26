@@ -37,7 +37,6 @@ mongoose.connect(process.env.MONGO_URI, {
   });
 
 
-
 const authRoutes = require("./routes/authRoutes.js");
 app.use("/api/login", authRoutes);
 
@@ -46,6 +45,9 @@ app.use("/api/agent", authenticateJwt, agentRoutes);
 
 const ticketRoutes = require("./routes/ticketRoutes.js");
 app.use("/api/ticket", authenticateJwt, ticketRoutes);
+
+const analyticsRoutes = require("./routes/analyticsRoutes.js");
+app.use("/api/analytics", authenticateJwt, analyticsRoutes);
 
 server.listen(PORT, () => {
   console.log(`HTTP server running at http://localhost:${PORT}`);

@@ -13,6 +13,9 @@ const agentSchema = new mongoose.Schema({
     trim: true
   },
 
+  //Combine agentCredentials into agentSchema
+  //  password: { type: String, required: true },
+
   status: {
     type: String,
     enum: ['Offline', 'Available', 'Busy', 'Break'],

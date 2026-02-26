@@ -26,6 +26,14 @@ const ticketSchema = new mongoose.Schema({
         min: 0
     },
 
+    //for internal queries (DB Relationship)
+    agent: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Agent",
+        required: true,
+    },
+
+    //for business logic (showing in frontend)
     agentId: {
         type: String,
         required: true,

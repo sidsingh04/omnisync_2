@@ -38,7 +38,7 @@ async function agentLogin(req, res) {
 async function supervisorLogin(req, res) {
     try {
         const { userId, password } = req.body;
-
+        
         const user = await superCredentials.findOne({ superId: userId });
         // console.log("User from DB:", user);
 

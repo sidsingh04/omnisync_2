@@ -2,6 +2,7 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") }
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const { agentCredentials, superCredentials } = require("../models/Credentials");
+const Agent = require("../models/Agent");
 
 const SALT_ROUNDS = 10;
 
@@ -26,15 +27,26 @@ async function seedData() {
 
         // Seed Agents
         for (const cred of AgentCredentialsData) {
+            // Fetch the Agent document to get its ObjectId
+            const agentDoc = await Agent.findOne({ agentId: cred.agentId });
+
+            if (!agentDoc) {
+                console.warn(`[Warning] Agent with agentId ${cred.agentId} not found in Agent collection. Skipping credential seeding for this agent.`);
+                continue;
+            }
+
             const hashedPassword = await bcrypt.hash(cred.password, SALT_ROUNDS);
 
             await agentCredentials.findOneAndUpdate(
                 { agentId: cred.agentId },
-                { password: hashedPassword },
+                {
+                    password: hashedPassword,
+                    agent: agentDoc._id
+                },
                 { upsert: true, new: true }
             );
         }
-        console.log(`Successfully seeded ${AgentCredentialsData.length} agent credentials.`);
+        console.log(`Finished processing agent credentials.`);
 
         // Seed Supervisors
         for (const cred of SupervisorCredentialsData) {
