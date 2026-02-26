@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import AgentDetailsModal from './AgentDetailsModal';
 
@@ -15,7 +15,10 @@ export default function AgentsTab() {
     const [agents, setAgents] = useState<Agent[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSearching, setIsSearching] = useState(false);
     const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
     const [metrics, setMetrics] = useState({
         total: 0,
@@ -26,20 +29,27 @@ export default function AgentsTab() {
     });
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const fetchAgents = async () => {
-        setIsLoading(true);
+    const fetchAgents = async (isBackgroundLoad = false) => {
+        if (!isBackgroundLoad) setIsLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:3000/api/agent/getAllAgents', {
+            const res = await axios.get('http://localhost:3000/api/agent/getPaginatedAgents', {
+                params: {
+                    page: currentPage,
+                    limit: 5,
+                    search: debouncedSearchQuery
+                },
                 headers: token ? { Authorization: `Bearer ${token}` } : {}
             });
             if (res.data.success) {
                 setAgents(res.data.agents);
+                setTotalPages(res.data.pagination.totalPages || 1);
             }
         } catch (error) {
             console.error("Error fetching agents:", error);
         } finally {
-            setIsLoading(false);
+            if (!isBackgroundLoad) setIsLoading(false);
+            setIsSearching(false);
         }
     };
 
@@ -57,13 +67,19 @@ export default function AgentsTab() {
         }
     };
 
+    // Fetch metrics purely on mount
     useEffect(() => {
-        fetchAgents();
         fetchMetrics();
     }, []);
 
+    // Standard data fetch hook tracking page or debounce changes
+    useEffect(() => {
+        fetchAgents(agents.length > 0); // Load gracefully in background if we already have data
+    }, [currentPage, debouncedSearchQuery]);
+
     // Debounce search query
     useEffect(() => {
+        setIsSearching(true);
         const timer = setTimeout(() => {
             setDebouncedSearchQuery(searchQuery);
         }, 300);
@@ -73,16 +89,10 @@ export default function AgentsTab() {
         };
     }, [searchQuery]);
 
-    // Filtering
-    const filteredAgents = useMemo(() => {
-        if (!debouncedSearchQuery) return agents;
-        const lower = debouncedSearchQuery.toLowerCase();
-        return agents.filter(a =>
-            a.name?.toLowerCase().includes(lower) ||
-            a.agentId?.toLowerCase().includes(lower) ||
-            a.status?.toLowerCase().includes(lower)
-        );
-    }, [agents, debouncedSearchQuery]);
+    // Reset page to 1 when search query changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [debouncedSearchQuery]);
 
     const MetricCard = ({ title, value, colorClass, icon }: any) => (
         <div className="bg-[var(--bg-card)] p-6 rounded-xl shadow-[var(--shadow-sm)] border border-[var(--border-primary)] flex items-center gap-4 cursor-default transition-all hover:-translate-y-1 hover:shadow-[var(--shadow-md)]">
@@ -139,7 +149,14 @@ export default function AgentsTab() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full py-3 px-4 pl-11 border border-[var(--border-secondary)] rounded-lg text-[0.95rem] outline-none transition-all focus:border-[var(--accent-primary)] focus:ring-4 focus:ring-[var(--accent-primary)]/10 bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] shadow-[var(--shadow-sm)]"
                 />
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">🔍</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
+                    {isSearching ? (
+                        <svg className="animate-spin h-5 w-5 text-[var(--accent-primary)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    ) : "🔍"}
+                </span>
             </div>
 
             {/* Main Layout containing status updates (mock) and table */}
@@ -173,63 +190,102 @@ export default function AgentsTab() {
                                     <th className="px-6 py-4 text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-center">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-[var(--border-primary)]">
-                                {filteredAgents.length > 0 ? (
-                                    filteredAgents.map(agent => (
-                                        <tr
-                                            key={agent.agentId}
-                                            className="hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
-                                            onClick={() => {
-                                                setSelectedAgent(agent);
-                                                setIsModalOpen(true);
-                                            }}
-                                        >
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-9 h-9 rounded-full bg-[var(--bg-tertiary)] text-[var(--accent-primary)] flex items-center justify-center font-bold text-sm">
-                                                        {agent.name.charAt(0)}
-                                                    </div>
-                                                    <span className="font-semibold text-[var(--text-primary)]">{agent.name}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 font-mono text-sm text-[var(--text-secondary)]">{agent.agentId}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${getStatusStyle(agent.status)}`}>
-                                                    <span className={`w-2 h-2 rounded-full ${getStatusDot(agent.status)}`}></span>
-                                                    {agent.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center font-medium text-[var(--text-primary)]">{agent.totalPending || 0}</td>
-                                            <td className="px-6 py-4 text-center font-medium text-[var(--text-primary)]">{agent.totalResolved || 0}</td>
-                                            <td className="px-6 py-4 text-center font-medium text-[var(--text-primary)]">{agent.pendingApprovals || 0}</td>
-                                            <td className="px-6 py-4 text-center">
-                                                <button
-                                                    className="p-2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10 rounded-lg transition-colors bg-transparent border-none cursor-pointer"
-                                                    title="View Details"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
+                            <tbody className="divide-y divide-[var(--border-primary)] relative">
+                                {isLoading && agents.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)] italic">
+                                            Loading agents...
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    <>
+                                        {/* Optional background overlay while searching */}
+                                        {isSearching && (
+                                            <tr className="absolute inset-0 bg-[var(--bg-card)]/40 z-10 transition-opacity pointer-events-none"></tr>
+                                        )}
+                                        {agents.length > 0 ? (
+                                            agents.map(agent => (
+                                                <tr
+                                                    key={agent.agentId}
+                                                    className="hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
+                                                    onClick={() => {
                                                         setSelectedAgent(agent);
                                                         setIsModalOpen(true);
                                                     }}
                                                 >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                    </svg>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)] italic">
-                                            No agents matched your search.
-                                        </td>
-                                    </tr>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-9 h-9 rounded-full bg-[var(--bg-tertiary)] text-[var(--accent-primary)] flex items-center justify-center font-bold text-sm">
+                                                                {agent.name.charAt(0)}
+                                                            </div>
+                                                            <span className="font-semibold text-[var(--text-primary)]">{agent.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 font-mono text-sm text-[var(--text-secondary)]">{agent.agentId}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${getStatusStyle(agent.status)}`}>
+                                                            <span className={`w-2 h-2 rounded-full ${getStatusDot(agent.status)}`}></span>
+                                                            {agent.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center font-medium text-[var(--text-primary)]">{agent.totalPending || 0}</td>
+                                                    <td className="px-6 py-4 text-center font-medium text-[var(--text-primary)]">{agent.totalResolved || 0}</td>
+                                                    <td className="px-6 py-4 text-center font-medium text-[var(--text-primary)]">{agent.pendingApprovals || 0}</td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <button
+                                                            className="p-2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10 rounded-lg transition-colors bg-transparent border-none cursor-pointer"
+                                                            title="View Details"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedAgent(agent);
+                                                                setIsModalOpen(true);
+                                                            }}
+                                                        >
+                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                            </svg>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)] italic">
+                                                    No agents matched your search.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </>
                                 )}
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Pagination Controls */}
+                    {!isLoading && totalPages > 1 && (
+                        <div className="px-6 py-4 border-t border-[var(--border-secondary)] bg-[var(--bg-tertiary)] flex items-center justify-between rounded-b-xl">
+                            <span className="text-sm text-[var(--text-secondary)]">
+                                Page <span className="font-semibold text-[var(--text-primary)]">{currentPage}</span> of <span className="font-semibold text-[var(--text-primary)]">{totalPages}</span>
+                            </span>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="px-4 py-2 text-sm font-medium text-[var(--text-primary)] bg-[var(--bg-card)] border border-[var(--border-secondary)] rounded-lg hover:bg-[var(--bg-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Previous
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                    className="px-4 py-2 text-sm font-medium text-[var(--text-primary)] bg-[var(--bg-card)] border border-[var(--border-secondary)] rounded-lg hover:bg-[var(--bg-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

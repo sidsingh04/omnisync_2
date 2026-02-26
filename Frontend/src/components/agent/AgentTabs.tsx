@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
 
 interface AgentTabsProps {
@@ -39,7 +39,7 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
         fetchPaginatedHistory();
     }, [agent?.agentId, historyPage]);
 
-    
+
     const pendingTickets = useMemo(() => {
         return tickets?.filter(t => t.status === 'pending') || [];
     }, [tickets]);
@@ -54,7 +54,7 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
         return tickets?.filter(t => t.status === 'resolved') || [];
     }, [tickets]);
 
-    
+
     const filteredPending = useMemo(() => {
         if (!searchQuery) return pendingTickets;
         const lowerQuery = searchQuery.toLowerCase();
@@ -96,17 +96,19 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
         <div className="flex-1 overflow-y-auto flex flex-col gap-6">
 
             {/* Search Bar */}
-            <div className="relative max-w-[600px]">
-                <input
-                    type="text"
-                    placeholder="Search tickets by ID, subject"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full py-3 px-4 pl-10 border border-[var(--border-secondary)] rounded-lg text-[0.95rem] outline-none transition-colors focus:border-[var(--accent-primary)] focus:ring-4 focus:ring-[var(--accent-primary)]/10 bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] shadow-sm"
-                />
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                    🔍
-                </span>
+            <div className="sticky top-0 z-20 bg-[var(--bg-primary)] pt-6 pb-2 -mt-6">
+                <div className="relative max-w-[600px]">
+                    <input
+                        type="text"
+                        placeholder="Search tickets by ID, subject"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full py-3 px-4 pl-10 border border-[var(--border-secondary)] rounded-lg text-[0.95rem] outline-none transition-colors focus:border-[var(--accent-primary)] focus:ring-4 focus:ring-[var(--accent-primary)]/10 bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] shadow-sm"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                        🔍
+                    </span>
+                </div>
             </div>
 
             {/* Tabs Navigation */}

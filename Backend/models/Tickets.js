@@ -69,5 +69,9 @@ const ticketSchema = new mongoose.Schema({
 // ticketSchema.index({ issueId: 1 });
 ticketSchema.index({ agentId: 1 });
 ticketSchema.index({ status: 1 });
+ticketSchema.index({ issueDate: 1 });
+ticketSchema.index({ resolvedDate: 1 });
+ticketSchema.index({ code: 1 });
+ticketSchema.index({ status: 1, resolvedDate: 1 });
 
 module.exports = mongoose.model("Ticket", ticketSchema);

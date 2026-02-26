@@ -18,12 +18,19 @@ async function createTicket(req, res) {
             code,
             description,
             agentId,
-            agent: agent._id, 
+            agent: agent._id,
             status: status || 'pending',
             issueDate: issueDate || new Date(),
             remarks: req.body.remarks || "Initial ticket creation"
         });
         await ticket.save();
+
+        // Update agent status to 'Busy' if they aren't 'Offline'
+        if (agent.status !== 'Offline') {
+            agent.status = 'Busy';
+            await agent.save();
+        }
+
         return res.json({ success: true, message: "Ticket created successfully" });
     } catch (error) {
         console.error("Error creating ticket:", error);

@@ -72,10 +72,51 @@ async function getAllAgents(req, res) {
     }
 }
 
+async function getPaginatedAgents(req, res) {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 5;
+        const search = req.query.search || '';
+        const skip = (page - 1) * limit;
+
+        let query = {};
+        if (search) {
+            query = {
+                $or: [
+                    { name: { $regex: search, $options: 'i' } },
+                    { agentId: { $regex: search, $options: 'i' } },
+                    { status: { $regex: search, $options: 'i' } }
+                ]
+            };
+        }
+
+        const agents = await Agent.find(query)
+            .skip(skip)
+            .limit(limit);
+
+        const totalAgents = await Agent.countDocuments(query);
+
+        return res.json({
+            success: true,
+            agents,
+            pagination: {
+                totalAgents,
+                totalPages: Math.ceil(totalAgents / limit),
+                currentPage: page,
+                limit
+            }
+        });
+    } catch (error) {
+        console.error("Error getting paginated agents:", error);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+}
+
 module.exports = {
     updateAgentStatus,
     getAgent,
     updateAgent,
     getAllAgents,
-    getAgentsOfStatus
+    getAgentsOfStatus,
+    getPaginatedAgents
 };

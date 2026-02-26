@@ -128,7 +128,7 @@ export default function TicketsTab() {
                         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
                             {pendingTickets.length > 0 ? (
                                 pendingTickets.map(t => (
-                                    <div key={t.issueId} className="bg-[var(--bg-card)] p-4 rounded-lg border border-[var(--border-primary)] shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] cursor-pointer">
+                                    <div key={t.issueId} className="bg-[var(--bg-card)] p-4 rounded-lg border border-blue-400 border-2 shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] cursor-pointer">
                                         <div className="flex justify-between items-start mb-2">
                                             <span className="font-mono font-semibold text-[var(--accent-primary)]">{t.issueId}</span>
                                             <span className="px-2.5 py-1 bg-[var(--status-pending-bg)] text-[var(--status-pending-color)] text-xs font-semibold rounded uppercase tracking-wider border border-[var(--status-pending-border)]">
@@ -166,7 +166,7 @@ export default function TicketsTab() {
                         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-[var(--bg-secondary)]">
                             {approvalTickets.length > 0 ? (
                                 approvalTickets.map(t => (
-                                    <div key={t.issueId} className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-primary)] shadow-[var(--shadow-sm)] flex flex-col gap-3">
+                                    <div key={t.issueId} className="bg-[var(--bg-card)] p-5 rounded-xl border border-orange-400 border-2 shadow-[var(--shadow-sm)] flex flex-col gap-3">
                                         <div className="flex justify-between items-center border-b border-[var(--border-secondary)] pb-3">
                                             <div className="flex flex-col">
                                                 <span className="font-mono font-bold text-lg text-[var(--text-primary)]">{t.issueId}</span>

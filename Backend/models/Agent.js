@@ -61,5 +61,6 @@ const agentSchema = new mongoose.Schema({
 
 // agentSchema.index({ agentId: 1 });
 agentSchema.index({ status: 1 });
+agentSchema.index({ name: 1 });
 
 module.exports = mongoose.model("Agent", agentSchema);

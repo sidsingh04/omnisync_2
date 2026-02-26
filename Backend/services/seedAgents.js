@@ -7,6 +7,9 @@ const Agent = require("../models/Agent"); // Adjust path if needed
 // Load environment variables (Make sure .env contains MONGO_URI)
 dotenv.config({ path: __dirname + "/../.env" });
 
+const dns = require("dns");
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
+
 // Initial Mock Data (You can add more or modify these based on your needs)
 const seedAgents = [
     {
@@ -48,7 +51,108 @@ const seedAgents = [
         successfullCalls: 0,
         totalPending: 0,
         totalResolved: 0
+    },
+    {
+        agentId: "A105",
+        name: "Rahul",
+        status: "Offline",
+        totalCallDuration: 0,
+        failCalls: 0,
+        successfullCalls: 0,
+        totalPending: 0,
+        totalResolved: 0
+    },
+    {
+        agentId: "A106",
+        name: "Rakesh",
+        status: "Offline",
+        totalCallDuration: 0,
+        failCalls: 0,
+        successfullCalls: 0,
+        totalPending: 0,
+        totalResolved: 0
+    },
+    {
+        agentId: "A106",
+        name: "Ravina",
+        status: "Offline",
+        totalCallDuration: 0,
+        failCalls: 0,
+        successfullCalls: 0,
+        totalPending: 0,
+        totalResolved: 0
+    },
+    {
+        agentId: "A107",
+        name: "Lokesh",
+        status: "Offline",
+        totalCallDuration: 0,
+        failCalls: 0,
+        successfullCalls: 0,
+        totalPending: 0,
+        totalResolved: 0
+    },
+    {
+        agentId: "A108",
+        name: "Shashank",
+        status: "Offline",
+        totalCallDuration: 0,
+        failCalls: 0,
+        successfullCalls: 0,
+        totalPending: 0,
+        totalResolved: 0
+    },
+    {
+        agentId: "A109",
+        name: "Laxmi",
+        status: "Offline",
+        totalCallDuration: 0,
+        failCalls: 0,
+        successfullCalls: 0,
+        totalPending: 0,
+        totalResolved: 0
+    },
+    {
+        agentId: "A110",
+        name: "Shubham",
+        status: "Offline",
+        totalCallDuration: 0,
+        failCalls: 0,
+        successfullCalls: 0,
+        totalPending: 0,
+        totalResolved: 0
+    },
+    {
+        agentId: "A111",
+        name: "Sneha",
+        status: "Offline",
+        totalCallDuration: 0,
+        failCalls: 0,
+        successfullCalls: 0,
+        totalPending: 0,
+        totalResolved: 0
+    },
+    {
+        agentId: "A112",
+        name: "Siddharth",
+        status: "Offline",
+        totalCallDuration: 0,
+        failCalls: 0,
+        successfullCalls: 0,
+        totalPending: 0,
+        totalResolved: 0
+    },
+    {
+        agentId: "A113",
+        name: "Sachin",
+        status: "Offline",
+        totalCallDuration: 0,
+        failCalls: 0,
+        successfullCalls: 0,
+        totalPending: 0,
+        totalResolved: 0
     }
+
 ];
 
 async function seedDatabase() {
