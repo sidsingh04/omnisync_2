@@ -34,7 +34,7 @@ export default function Login() {
                     sessionStorage.setItem("isAuthenticated", "true");
                     sessionStorage.setItem("userId", userId);
                     sessionStorage.setItem("Privelege", "agent");
-                    // sessionStorage.setItem("agentId", userId);
+                    sessionStorage.setItem("agentId", userId);
                     // sessionStorage.setItem("agent", );
                     navigate('/agent');
                 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import AgentDetailsModal from './AgentDetailsModal';
+import socket from '../../services/socket';
 
 interface Agent {
     agentId: string;
@@ -9,6 +10,15 @@ interface Agent {
     totalPending: number;
     totalResolved: number;
     pendingApprovals: number;
+}
+
+interface StatusUpdate {
+    id: string;
+    agentId: string;
+    name: string;
+    oldStatus?: string;
+    status: string;
+    timestamp: string;
 }
 
 export default function AgentsTab() {
@@ -29,6 +39,7 @@ export default function AgentsTab() {
         busy: 0
     });
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [statusUpdates, setStatusUpdates] = useState<StatusUpdate[]>([]);
 
     const fetchAgents = async (isBackgroundLoad = false) => {
         if (!isBackgroundLoad) setIsLoading(true);
@@ -79,6 +90,47 @@ export default function AgentsTab() {
     useEffect(() => {
         fetchAgents(agents.length > 0); // Load gracefully in background if we already have data
     }, [currentPage, debouncedSearchQuery]);
+
+    // Socket.io real-time updates
+    useEffect(() => {
+        socket.connect();
+
+        const handleStatusUpdate = (data: { agentId: string, name: string, oldStatus?: string, status: string, timestamp: string }) => {
+            // Prepend new update
+            setStatusUpdates(prev => [{
+                id: Math.random().toString(36).substr(2, 9),
+                ...data
+            }, ...prev].slice(0, 50)); // Keep the latest 50 updates
+
+            // Update agents list
+            setAgents(prevAgents => prevAgents.map(agent =>
+                agent.agentId === data.agentId ? { ...agent, status: data.status } : agent
+            ));
+
+            // Sync top metrics
+            fetchMetrics();
+        };
+
+        const handleTicketActivity = () => {
+            fetchAgents(true); // Silent background table refresh
+            fetchMetrics(); // Make sure top tiles sync as well
+        };
+
+        socket.on('agentStatusUpdated', handleStatusUpdate);
+        socket.on('ticketAssigned', handleTicketActivity);
+        socket.on('ticketApprovalRequested', handleTicketActivity);
+        socket.on('ticketResolved', handleTicketActivity);
+        socket.on('ticketRejected', handleTicketActivity);
+
+        return () => {
+            socket.off('agentStatusUpdated', handleStatusUpdate);
+            socket.off('ticketAssigned', handleTicketActivity);
+            socket.off('ticketApprovalRequested', handleTicketActivity);
+            socket.off('ticketResolved', handleTicketActivity);
+            socket.off('ticketRejected', handleTicketActivity);
+            socket.disconnect();
+        };
+    }, []);
 
     // Debounce search query
     useEffect(() => {
@@ -163,15 +215,57 @@ export default function AgentsTab() {
             </div>
 
             {/* Main Layout containing status updates (mock) and table */}
-            <div className="flex gap-6 mt-2">
+            <div className="flex gap-6 mt-2 items-start">
                 {/* Left Mini Panel */}
-                <div className="w-[300px] bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border-primary)] flex flex-col min-h-[500px]">
-                    <div className="px-5 py-4 border-b border-[var(--border-secondary)] flex justify-between items-center bg-[var(--bg-tertiary)] rounded-t-xl">
+                <div className="w-[300px] bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border-primary)] flex flex-col min-h-[500px] max-h-[600px]">
+                    <div className="px-5 py-4 border-b border-[var(--border-secondary)] flex justify-between items-center bg-[var(--bg-tertiary)] rounded-t-xl shrink-0">
                         <h2 className="text-[1.05rem] font-bold text-[var(--text-primary)] m-0">Status Updates</h2>
+                        {statusUpdates.length > 0 && (
+                            <button
+                                onClick={() => setStatusUpdates([])}
+                                className="text-xs bg-transparent border border-[var(--border-secondary)] px-2 py-1 rounded text-[var(--text-secondary)] hover:text-red-500 hover:border-red-500 transition-colors cursor-pointer"
+                            >
+                                Clear
+                            </button>
+                        )}
                     </div>
-                    <div className="p-6 flex-1 flex items-center justify-center text-[var(--text-muted)] text-sm text-center italic bg-[var(--bg-secondary)]">
-                        No recent status updates
-                    </div>
+                    {statusUpdates.length === 0 ? (
+                        <div className="p-6 flex-1 flex items-center justify-center text-[var(--text-muted)] text-sm text-center italic bg-[var(--bg-secondary)]">
+                            No recent status updates
+                        </div>
+                    ) : (
+                        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-[var(--bg-secondary)]">
+                            {statusUpdates.map(update => (
+                                <div key={update.id} className="shrink-0 bg-[var(--bg-card)] border border-[var(--border-secondary)] p-4 rounded-lg shadow-sm text-sm animate-fade-in-down flex flex-col gap-2 relative overflow-hidden group">
+                                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${getStatusDot(update.status)}`}></div>
+                                    <div className="flex justify-between items-start ml-2">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-semibold text-[var(--text-primary)]">{update.name}</span>
+                                            <span className="text-[0.7rem] text-[var(--text-muted)] font-mono">{update.agentId}</span>
+                                        </div>
+                                        <span className="text-xs text-[var(--text-muted)] font-medium bg-[var(--bg-tertiary)] px-2 py-1 rounded-full border border-[var(--border-secondary)]">
+                                            {new Date(update.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1 ml-2">
+                                        {update.oldStatus && update.oldStatus !== update.status && (
+                                            <>
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border ${getStatusStyle(update.oldStatus)} opacity-75`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${getStatusDot(update.oldStatus)}`}></span>
+                                                    {update.oldStatus}
+                                                </span>
+                                                <span className="text-[var(--text-muted)] font-semibold text-xs">➔</span>
+                                            </>
+                                        )}
+                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border ${getStatusStyle(update.status)}`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${getStatusDot(update.status)}`}></span>
+                                            {update.status}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Right Table Panel */}

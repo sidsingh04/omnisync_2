@@ -22,9 +22,15 @@ const PORT = 3000;
 
 const server = http.createServer(app);
 
+// Initialize Socket.io
+const { initSocket } = require("./socket");
+initSocket(server);
 
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  exposedHeaders: ['x-idempotency-key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-idempotency-key']
+}));
 app.use(passport.initialize());
 
 mongoose.connect(process.env.MONGO_URI, {

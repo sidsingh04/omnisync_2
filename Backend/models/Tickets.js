@@ -62,7 +62,11 @@ const ticketSchema = new mongoose.Schema({
         type: String,
         enum: ["pending", "approval", "resolved"],
         default: "pending"
-    }
+    },
+
+    rejectionHistory: [{
+        type: Date
+    }]
 
 }, { timestamps: true });
 

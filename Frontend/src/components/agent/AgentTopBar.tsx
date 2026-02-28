@@ -1,6 +1,5 @@
 import React from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
 
 interface AgentTopBarProps {
     agent: any;
@@ -8,25 +7,6 @@ interface AgentTopBarProps {
 }
 
 export default function AgentTopBar({ agent, setAgent }: AgentTopBarProps) {
-    const navigate = useNavigate();
-
-    const handleSignOut = async () => {
-        if (agent?.status === 'Break') {
-            alert('You cannot sign out while on break.');
-            return;
-        }
-
-        try {
-            await axios.post('http://localhost:3000/api/agent/update-status', {
-                agentId: agent?.agentId,
-                status: 'Offline'
-            });
-            sessionStorage.clear();
-            navigate('/');
-        } catch (e) {
-            console.error("Signout update failed", e);
-        }
-    };
 
     const handleToggleBreak = async () => {
         const newStatus = agent?.status === 'Break' ? (agent.totalPending > 0 ? 'Busy' : 'Available') : 'Break';
@@ -61,19 +41,10 @@ export default function AgentTopBar({ agent, setAgent }: AgentTopBarProps) {
 
             <button
                 onClick={handleToggleBreak}
-                className={`mr-2.5 px-4 py-2 border-none rounded cursor-pointer flex items-center gap-2 text-sm transition-colors text-white ${agent?.status === 'Break' ? 'bg-[var(--accent-secondary)] hover:bg-[var(--accent-primary)]' : 'bg-[var(--status-pending-color)] hover:bg-red-500'}`}
+                className={`mr-6 px-4 py-2 border-none rounded cursor-pointer flex items-center gap-2 text-sm transition-colors text-white ${agent?.status === 'Break' ? 'bg-[var(--accent-secondary)] hover:bg-[var(--accent-primary)]' : 'bg-[var(--status-pending-color)] hover:bg-red-500'}`}
             >
                 {agent?.status === 'Break' ? '▶ End Break' : '☕ Take Break'}
             </button>
-
-            <div className="flex items-center gap-2.5">
-                <button
-                    onClick={handleSignOut}
-                    className="bg-transparent border border-red-500 text-red-500 px-4 py-1.5 rounded-md cursor-pointer text-sm transition-all hover:bg-red-500 hover:text-white flex items-center gap-2"
-                >
-                    Sign Out
-                </button>
-            </div>
         </header>
     );
 }

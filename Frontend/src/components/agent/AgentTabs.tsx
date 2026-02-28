@@ -1,13 +1,16 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 interface AgentTabsProps {
     agent: any;
     tickets: any[];
     onTicketClick: (ticket: any) => void;
+    historyRefreshId?: number;
 }
 
-export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsProps) {
+export default function AgentTabs({ agent, tickets, onTicketClick, historyRefreshId }: AgentTabsProps) {
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'pending' | 'activity'>('pending');
 
     // Pending Tickets search (client-side)
@@ -22,6 +25,25 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
     const [totalHistoryPages, setTotalHistoryPages] = useState(1);
     const [paginatedHistory, setPaginatedHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const handleSignOut = async () => {
+        if (agent?.status === 'Break') {
+            alert('You cannot sign out while on break.');
+            return;
+        }
+
+        try {
+            await axios.post('http://localhost:3000/api/agent/update-status', {
+                agentId: agent?.agentId,
+                status: 'Offline'
+            });
+            sessionStorage.clear();
+            navigate('/');
+        } catch (e) {
+            console.error("Signout update failed", e);
+        }
+    };
 
     // Debounce history search
     useEffect(() => {
@@ -59,7 +81,7 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
         };
 
         fetchPaginatedHistory();
-    }, [agent?.agentId, historyPage, debouncedHistorySearch]);
+    }, [agent?.agentId, historyPage, debouncedHistorySearch, historyRefreshId]);
 
     const pendingTickets = useMemo(() => {
         return tickets?.filter(t => t.status === 'pending') || [];
@@ -89,7 +111,11 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
             (ticket.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700');
 
         return (
-            <div key={ticket.issueId} className="bg-[var(--bg-card)] p-4 rounded-lg border border-[var(--border-primary)] flex flex-col gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:bg-[var(--bg-card-hover)] hover:shadow-[var(--shadow-md)]">
+            <div
+                key={ticket.issueId}
+                onClick={() => onTicketClick(ticket)}
+                className="bg-[var(--bg-card)] p-4 rounded-lg border border-[var(--border-primary)] flex flex-col gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:bg-[var(--bg-card-hover)] hover:shadow-[var(--shadow-md)]"
+            >
                 <div className="flex justify-between items-center">
                     <span className="font-mono font-semibold text-gray-500">{ticket.issueId}</span>
                     <span className={`text-[0.75rem] px-2.5 py-1 rounded-md uppercase font-semibold capitalize ${statusColorClass}`}>
@@ -116,29 +142,44 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
         <div className="flex-1 flex gap-6 overflow-hidden h-full">
 
             {/* Left Sidebar Navigation */}
-            <div className="w-[220px] shrink-0 flex flex-col gap-2 border-r border-[#e5e7eb] pr-4 h-full">
-                <button
-                    onClick={() => setActiveTab('pending')}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm cursor-pointer ${activeTab === 'pending'
-                        ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] font-bold'
-                        : 'text-[var(--text-secondary)] hover:bg-gray-100 hover:text-[var(--text-primary)]'
-                        }`}
-                >
-                    <span>Pending Tickets</span>
-                    <span className={`text-xs py-0.5 px-2 rounded-full font-bold ${activeTab === 'pending' ? 'bg-[var(--accent-primary)] text-white' : 'bg-gray-200 text-gray-600'}`}>
-                        {pendingTickets.length}
-                    </span>
-                </button>
+            <div className="w-[220px] shrink-0 flex flex-col justify-between border-r border-[#e5e7eb] px-4 h-full pb-4">
+                <div className="flex flex-col gap-2">
+                    <button
+                        onClick={() => setActiveTab('pending')}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm cursor-pointer ${activeTab === 'pending'
+                            ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] font-bold'
+                            : 'text-[var(--text-secondary)] hover:bg-gray-100 hover:text-[var(--text-primary)]'
+                            }`}
+                    >
+                        <span>Pending Tickets</span>
+                        <span className={`text-xs py-0.5 px-2 rounded-full font-bold ${activeTab === 'pending' ? 'bg-[var(--accent-primary)] text-white' : 'bg-gray-200 text-gray-600'}`}>
+                            {pendingTickets.length}
+                        </span>
+                    </button>
 
-                <button
-                    onClick={() => setActiveTab('activity')}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm cursor-pointer ${activeTab === 'activity'
-                        ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] font-bold'
-                        : 'text-[var(--text-secondary)] hover:bg-gray-100 hover:text-[var(--text-primary)]'
-                        }`}
-                >
-                    <span>Activity & History</span>
-                </button>
+                    <button
+                        onClick={() => setActiveTab('activity')}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm cursor-pointer ${activeTab === 'activity'
+                            ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] font-bold'
+                            : 'text-[var(--text-secondary)] hover:bg-gray-100 hover:text-[var(--text-primary)]'
+                            }`}
+                    >
+                        <span>Activity & History</span>
+                    </button>
+                </div>
+
+                {/* Bottom Sign Out Container */}
+                <div className="mt-auto flex justify-center w-full">
+                    <button
+                        onClick={handleSignOut}
+                        className="w-[90%] flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 border border-red-200 rounded-xl cursor-pointer text-sm font-semibold transition-all hover:bg-red-600 hover:text-white hover:border-red-600 shadow-sm"
+                    >
+                        <span>Sign Out</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             {/* Main Content Area */}
@@ -165,7 +206,7 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
                         {filteredPending.length > 0 ? (
                             filteredPending.map(t => renderTicketCard(t, 'pending'))
                         ) : (
-                            <div className="text-center p-8 text-gray-500 italic bg-white rounded-lg border border-gray-200 shadow-sm">
+                            <div className="text-center p-8 text-[var(--text-muted)] italic bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-primary)] shadow-sm">
                                 {searchQuery ? 'No matching tickets found' : 'No pending tickets available'}
                             </div>
                         )}
@@ -198,16 +239,7 @@ export default function AgentTabs({ agent, tickets, onTicketClick }: AgentTabsPr
                             </div>
                         </div>
 
-                        {approvalTickets.length > 0 && (
-                            <>
-                                <div className="mt-2 pb-2 border-b border-gray-200 text-gray-500 text-xs uppercase tracking-wider font-bold">
-                                    Approvals Sent to Supervisor
-                                </div>
-                                <div className="flex flex-col gap-3">
-                                    {approvalTickets.map(t => renderTicketCard(t, 'approval'))}
-                                </div>
-                            </>
-                        )}
+                        {/* Removed separate approval tickets list to allow them to flow organically into the paginated history list */}
 
                         <div className="mt-2 pb-2 border-b border-gray-200 text-gray-500 text-xs uppercase tracking-wider font-bold flex justify-between items-center">
                             <span>Ticket History</span>

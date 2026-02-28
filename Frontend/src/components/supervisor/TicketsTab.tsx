@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { v4 as uuidv4 } from "uuid";
 import CreateTicketModal from './CreateTicketModal';
+import socket from '../../services/socket';
 
 interface Ticket {
     issueId: string;
@@ -44,47 +46,68 @@ export default function TicketsTab() {
         fetchData();
     }, []);
 
-    const handleTicketApproval = async (ticket: Ticket, isApproved: boolean) => {
-        if (!window.confirm(`Are you sure you want to ${isApproved ? 'approve' : 'reject'} ticket ${ticket.issueId}?`)) return;
+    useEffect(() => {
+
+        socket.connect();
+
+        const refreshTickets = () => {
+            fetchData();
+        };
+
+        socket.on("ticketAssigned", refreshTickets);
+        socket.on("ticketApprovalSent", refreshTickets);
+        socket.on("ticketResolved", refreshTickets);
+        socket.on("ticketRejected", refreshTickets);
+
+        return () => {
+            socket.off("ticketAssigned", refreshTickets);
+            socket.off("ticketApprovalSent", refreshTickets);
+            socket.off("ticketResolved", refreshTickets);
+            socket.off("ticketRejected", refreshTickets);
+        };
+
+    }, []);
+
+    const handleTicketApproval = async (
+        ticket: Ticket,
+        isApproved: boolean
+    ) => {
+
+        if (!window.confirm(
+            `Are you sure you want to ${isApproved ? 'approve' : 'reject'} ticket ${ticket.issueId}?`
+        )) return;
 
         try {
-            // First fetch agent
-            const agentRes = await axios.get(`http://localhost:3000/api/agent/get-agent?agentId=${ticket.agentId}`);
-            if (!agentRes.data.success) throw new Error("Agent not found");
-            const agentData = agentRes.data.agent;
 
-            let updatedAgent = { ...agentData };
-            let updatedTicket = { ...ticket };
+            const updatedTicket: any = {
+                issueId: ticket.issueId,
+                status: isApproved ? "resolved" : "pending"
+            };
 
-            if (isApproved) {
-                updatedAgent.totalResolved += 1;
-                updatedAgent.successfulCalls += 1;
-                updatedAgent.pendingApprovals -= 1;
-                if (updatedAgent.totalPending === 0) {
-                    updatedAgent.status = 'Available';
-                }
-
-                updatedTicket.status = 'resolved';
-                updatedTicket.resolvedDate = new Date().toUTCString();
-            } else {
-                updatedAgent.failedCalls += 1;
-                updatedAgent.pendingApprovals -= 1;
-                updatedAgent.totalPending += 1;
-                updatedAgent.status = 'Busy';
-
-                updatedTicket.status = 'pending';
-                (updatedTicket as any).approvalDate = null;
+            if (!isApproved) {
+                updatedTicket.rejectedDate = new Date().toUTCString();
             }
 
-            await Promise.all([
-                axios.put('http://localhost:3000/api/agent/update', updatedAgent),
-                axios.put('http://localhost:3000/api/ticket/update', updatedTicket)
-            ]);
+            if (isApproved) {
+                updatedTicket.resolvedDate =
+                    new Date().toUTCString();
+            } else {
+                updatedTicket.approvalDate = null;
+            }
 
-            fetchData(); // Refresh UI
+            await axios.put(
+                "http://localhost:3000/api/ticket/update",
+                updatedTicket,
+                {
+                    headers: {
+                        "x-idempotency-key": uuidv4()
+                    }
+                }
+            );
+
         } catch (error) {
-            console.error("Error updating ticket approval:", error);
-            alert("Failed to update the ticket.");
+            console.error("Ticket approval error:", error);
+            alert("Failed to update ticket.");
         }
     };
 

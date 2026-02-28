@@ -3,6 +3,7 @@ import axios from 'axios';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
+import socket from '../../services/socket';
 
 export default function MonthlyAnalysisChart() {
     const [availableMonths, setAvailableMonths] = useState<string[]>([]);
@@ -33,22 +34,38 @@ export default function MonthlyAnalysisChart() {
         fetchMonths();
     }, []);
 
-    useEffect(() => {
+    const fetchMonthlyData = async () => {
         if (!selectedMonth) return;
-        const fetchMonthlyData = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                const res = await axios.get(`http://localhost:3000/api/analytics/monthly-data?month=${selectedMonth}`, {
-                    headers: token ? { Authorization: `Bearer ${token}` } : {}
-                });
-                if (res.data.success) {
-                    setChartData(res.data.days);
-                }
-            } catch (error) {
-                console.error("Failed to load monthly data", error);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`http://localhost:3000/api/analytics/monthly-data?month=${selectedMonth}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            if (res.data.success) {
+                setChartData(res.data.days);
             }
-        };
+        } catch (error) {
+            console.error("Failed to load monthly data", error);
+        }
+    };
+
+    useEffect(() => {
         fetchMonthlyData();
+    }, [selectedMonth]);
+
+    // Live Socket Sync for Chart Bars
+    useEffect(() => {
+        const handleChartUpdate = () => {
+            fetchMonthlyData();
+        };
+
+        socket.on('ticketCreated', handleChartUpdate);
+        socket.on('ticketResolved', handleChartUpdate);
+
+        return () => {
+            socket.off('ticketCreated', handleChartUpdate);
+            socket.off('ticketResolved', handleChartUpdate);
+        };
     }, [selectedMonth]);
 
     const formatMonthLabel = (monthString: string) => {

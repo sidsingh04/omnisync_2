@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { v4 as uuidv4 } from "uuid";
 
 interface TicketDetailsModalProps {
     isOpen: boolean;
@@ -39,20 +40,15 @@ export default function TicketDetailsModal({ isOpen, onClose, ticket, agent, onT
                 approvalDate: new Date().toUTCString(),
             };
 
-            await axios.put('http://localhost:3000/api/ticket/update', updatedTicket);
-
-            const updatedAgent = {
-                ...agent,
-                totalCallDuration: (agent.totalCallDuration || 0) + duration,
-                pendingApprovals: (agent.pendingApprovals || 0) + 1,
-                totalPending: Math.max(0, agent.totalPending - 1),
-            };
-
-            if (updatedAgent.totalPending === 0) {
-                updatedAgent.status = 'Available';
-            }
-
-            await axios.put('http://localhost:3000/api/agent/update', updatedAgent);
+            await axios.put(
+                'http://localhost:3000/api/ticket/update',
+                updatedTicket,
+                {
+                    headers: {
+                        "x-idempotency-key": uuidv4()
+                    }
+                }
+            );
 
             // Revert UI fields back
             setRemarks('');
@@ -84,60 +80,104 @@ export default function TicketDetailsModal({ isOpen, onClose, ticket, agent, onT
                 </div>
 
                 {/* Body */}
-                <div className="p-6 overflow-y-auto max-h-[70vh] flex flex-col gap-4">
-                    <div className="flex justify-between items-baseline text-[0.95rem]">
-                        <span className="text-[var(--text-secondary)] font-medium">Ticket ID:</span>
-                        <span className="text-[var(--text-primary)] font-semibold">{ticket.issueId}</span>
+                <div className="p-6 overflow-y-auto max-h-[70vh] flex flex-col gap-6">
+                    {/* Meta Information Grid */}
+                    <div className="grid grid-cols-2 gap-4 bg-[var(--bg-secondary)] p-4 rounded-lg border border-[var(--border-secondary)]">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[0.8rem] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Ticket ID</span>
+                            <span className="text-[0.95rem] font-mono text-[var(--text-primary)]">{ticket.issueId}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[0.8rem] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Status</span>
+                            <div>
+                                <span className={`inline-block px-2.5 py-1 text-xs font-bold rounded-md uppercase ${ticket.status === 'resolved' ? 'bg-green-100 text-green-700' :
+                                    ticket.status === 'approval' ? 'bg-orange-100 text-orange-700' :
+                                        'bg-blue-100 text-blue-700'
+                                    }`}>
+                                    {ticket.status}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[0.8rem] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Issue Code</span>
+                            <span className="text-[0.95rem] font-medium text-[var(--text-primary)]">{ticket.code}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[0.8rem] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Issue Date</span>
+                            <span className="text-[0.95rem] text-[var(--text-primary)]">{new Date(ticket.issueDate).toLocaleString()}</span>
+                        </div>
+                        {ticket.resolvedDate && (
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[0.8rem] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Resolved Date</span>
+                                <span className="text-[0.95rem] text-[var(--text-primary)]">{new Date(ticket.resolvedDate).toLocaleString()}</span>
+                            </div>
+                        )}
+                        {ticket.callDuration > 0 && ticket.status !== 'pending' && (
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[0.8rem] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Call Duration</span>
+                                <span className="text-[0.95rem] text-[var(--text-primary)]">{ticket.callDuration} mins</span>
+                            </div>
+                        )}
                     </div>
-                    <div className="flex justify-between items-baseline text-[0.95rem]">
-                        <span className="text-[var(--text-secondary)] font-medium">Issue:</span>
-                        <span className="text-[var(--text-primary)] font-semibold">{ticket.code}</span>
-                    </div>
-                    <div className="flex flex-col gap-2 text-[0.95rem]">
-                        <span className="text-[var(--text-secondary)] font-medium">Description:</span>
-                        <p className="bg-[var(--bg-tertiary)] p-3 rounded-md font-normal leading-relaxed m-0 border border-[var(--border-secondary)] list-inside text-[var(--text-primary)] whitespace-pre-wrap">
+
+                    <div className="flex flex-col gap-2">
+                        <span className="text-sm font-semibold text-[var(--text-primary)]">Description:</span>
+                        <p className="bg-[var(--bg-tertiary)] p-4 rounded-md font-normal leading-relaxed m-0 border border-[var(--border-secondary)] text-[var(--text-primary)] whitespace-pre-wrap text-[0.95rem]">
                             {ticket.description}
                         </p>
                     </div>
 
-                    <hr className="border-t border-[var(--border-primary)] my-2" />
+                    {ticket.status !== 'pending' && ticket.remarks && ticket.remarks !== "Initial ticket creation" && (
+                        <div className="flex flex-col gap-2">
+                            <span className="text-sm font-semibold text-[var(--text-primary)]">Agent Remarks:</span>
+                            <div className="bg-[var(--bg-tertiary)] p-4 rounded-md border border-[var(--border-secondary)] text-[0.95rem] italic text-[var(--text-primary)] whitespace-pre-wrap">
+                                "{ticket.remarks}"
+                            </div>
+                        </div>
+                    )}
 
-                    <div className="flex flex-col gap-2">
-                        <label htmlFor="ticketRemarks" className="text-sm font-medium text-[var(--text-primary)]">Agent Remarks <span className="text-red-500">*</span></label>
-                        <textarea
-                            id="ticketRemarks"
-                            className="p-3 border border-[var(--border-secondary)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] font-sans text-[0.95rem] outline-none transition-colors w-full focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] disabled:bg-[var(--bg-secondary)] disabled:cursor-not-allowed"
-                            placeholder={agent?.status === 'Break' ? 'Action disabled while on break.' : 'Enter resolution details or remarks...'}
-                            rows={4}
-                            disabled={agent?.status === 'Break' || isSubmitting}
-                            value={remarks}
-                            onChange={(e) => setRemarks(e.target.value)}
-                        />
-                    </div>
+                    {ticket.status === 'pending' && (
+                        <>
+                            <hr className="border-t border-[var(--border-primary)] my-2" />
 
-                    <div className="flex flex-col gap-2">
-                        <label htmlFor="ticketCallDuration" className="text-sm font-medium text-[var(--text-primary)]">Call Duration (minutes) <span className="text-red-500">*</span></label>
-                        <input
-                            type="number"
-                            id="ticketCallDuration"
-                            min="0"
-                            placeholder="e.g. 15"
-                            className="p-3 border border-[var(--border-secondary)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] font-sans text-[0.95rem] outline-none transition-colors w-full focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] disabled:bg-[var(--bg-secondary)] disabled:cursor-not-allowed"
-                            disabled={agent?.status === 'Break' || isSubmitting}
-                            value={callDuration}
-                            onChange={(e) => setCallDuration(e.target.value)}
-                        />
-                    </div>
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="ticketRemarks" className="text-sm font-semibold text-[var(--text-primary)]">Agent Remarks <span className="text-red-500">*</span></label>
+                                <textarea
+                                    id="ticketRemarks"
+                                    className="p-3 border border-[var(--border-secondary)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] font-sans text-[0.95rem] outline-none transition-colors w-full focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] disabled:bg-[var(--bg-secondary)] disabled:cursor-not-allowed"
+                                    placeholder={agent?.status === 'Break' ? 'Action disabled while on break.' : 'Enter resolution details or remarks...'}
+                                    rows={4}
+                                    disabled={agent?.status === 'Break' || isSubmitting}
+                                    value={remarks}
+                                    onChange={(e) => setRemarks(e.target.value)}
+                                />
+                            </div>
 
-                    <div className="flex flex-col gap-2">
-                        <label htmlFor="approvalAttachment" className="text-sm font-medium text-[var(--text-primary)]">Attachment (Image/Audio)</label>
-                        <input
-                            type="file"
-                            id="approvalAttachment"
-                            accept="image/*,audio/*"
-                            className="p-3 border border-[var(--border-secondary)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] font-sans text-[0.95rem] outline-none transition-colors w-full focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)]"
-                        />
-                    </div>
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="ticketCallDuration" className="text-sm font-semibold text-[var(--text-primary)]">Call Duration (minutes) <span className="text-red-500">*</span></label>
+                                <input
+                                    type="number"
+                                    id="ticketCallDuration"
+                                    min="0"
+                                    placeholder="e.g. 15"
+                                    className="p-3 border border-[var(--border-secondary)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] font-sans text-[0.95rem] outline-none transition-colors w-full focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] disabled:bg-[var(--bg-secondary)] disabled:cursor-not-allowed"
+                                    disabled={agent?.status === 'Break' || isSubmitting}
+                                    value={callDuration}
+                                    onChange={(e) => setCallDuration(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="approvalAttachment" className="text-sm font-semibold text-[var(--text-primary)]">Attachment (Image/Audio)</label>
+                                <input
+                                    type="file"
+                                    id="approvalAttachment"
+                                    accept="image/*,audio/*"
+                                    className="p-3 border border-[var(--border-secondary)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] font-sans text-[0.95rem] outline-none transition-colors w-full focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)]"
+                                />
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Footer */}
@@ -148,13 +188,15 @@ export default function TicketDetailsModal({ isOpen, onClose, ticket, agent, onT
                     >
                         Close
                     </button>
-                    <button
-                        onClick={handleApproval}
-                        disabled={agent?.status === 'Break' || isSubmitting}
-                        className="px-5 py-2.5 rounded-md font-medium cursor-pointer text-[0.95rem] transition-colors bg-[var(--accent-secondary)] text-[var(--text-primary)] border-none hover:bg-[var(--accent-primary)] disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                        {isSubmitting ? 'Sending...' : 'Send for Approval'}
-                    </button>
+                    {ticket.status === 'pending' && (
+                        <button
+                            onClick={handleApproval}
+                            disabled={agent?.status === 'Break' || isSubmitting}
+                            className="px-5 py-2.5 rounded-md font-medium cursor-pointer text-[0.95rem] transition-colors bg-[var(--accent-secondary)] text-[var(--text-primary)] border-none hover:bg-[var(--accent-primary)] disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                            {isSubmitting ? 'Sending...' : 'Send for Approval'}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

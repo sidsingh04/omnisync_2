@@ -1,4 +1,5 @@
 const Agent = require("../models/Agent");
+const { getIO } = require("../socket");
 
 async function updateAgentStatus(req, res) {
     try {
@@ -7,8 +8,22 @@ async function updateAgentStatus(req, res) {
         if (!agent) {
             return res.status(404).json({ success: false, message: "Agent not found" });
         }
+        const oldStatus = agent.status;
         agent.status = status;
         await agent.save();
+
+        try {
+            getIO().emit("agentStatusUpdated", {
+                agentId: agent.agentId,
+                name: agent.name,
+                oldStatus: oldStatus,
+                status: agent.status,
+                timestamp: new Date().toISOString()
+            });
+        } catch (socketErr) {
+            console.error("Socket emit error:", socketErr);
+        }
+
         return res.json({ success: true, message: "Status updated successfully" });
     } catch (error) {
         console.error("Error updating agent status:", error);
@@ -45,14 +60,39 @@ async function getAgentsOfStatus(req, res) {
 async function updateAgent(req, res) {
     try {
         const { _id, __v, agentId, ...updateFields } = req.body;
+
+        console.log(req.body);
+
+        // Fetch current document to capture the old status
+        const currentAgent = await Agent.findOne({ agentId });
+        if (!currentAgent) {
+            return res.status(404).json({ success: false, message: "Agent not found" });
+        }
+
+        const oldStatus = currentAgent.status;
+
         const updatedAgent = await Agent.findOneAndUpdate(
             { agentId },
             { $set: updateFields },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!updatedAgent) {
             return res.status(404).json({ success: false, message: "Agent not found" });
+        }
+
+        if (updateFields.status && oldStatus !== updateFields.status) {
+            try {
+                getIO().emit("agentStatusUpdated", {
+                    agentId: updatedAgent.agentId,
+                    name: updatedAgent.name,
+                    oldStatus: oldStatus,
+                    status: updatedAgent.status,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (socketErr) {
+                console.error("Socket emit error:", socketErr);
+            }
         }
 
         return res.json({ success: true, message: "Agent updated successfully", agent: updatedAgent });
@@ -90,9 +130,55 @@ async function getPaginatedAgents(req, res) {
             };
         }
 
-        const agents = await Agent.find(query)
-            .skip(skip)
-            .limit(limit);
+        const agents = await Agent.aggregate([
+            { $match: query },
+            { $skip: skip },
+            { $limit: limit },
+            {
+                $lookup: {
+                    from: "tickets",
+                    localField: "_id",
+                    foreignField: "agent",
+                    as: "agentTickets"
+                }
+            },
+            {
+                $addFields: {
+                    totalPending: {
+                        $size: {
+                            $filter: {
+                                input: "$agentTickets",
+                                as: "ticket",
+                                cond: { $eq: ["$$ticket.status", "pending"] }
+                            }
+                        }
+                    },
+                    totalResolved: {
+                        $size: {
+                            $filter: {
+                                input: "$agentTickets",
+                                as: "ticket",
+                                cond: { $eq: ["$$ticket.status", "resolved"] }
+                            }
+                        }
+                    },
+                    pendingApprovals: {
+                        $size: {
+                            $filter: {
+                                input: "$agentTickets",
+                                as: "ticket",
+                                cond: { $eq: ["$$ticket.status", "approval"] }
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    agentTickets: 0 // Exclude massive raw array
+                }
+            }
+        ]);
 
         const totalAgents = await Agent.countDocuments(query);
 

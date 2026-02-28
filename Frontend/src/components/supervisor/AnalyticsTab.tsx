@@ -4,6 +4,7 @@ import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend
 } from 'recharts';
 import MonthlyAnalysisChart from './MonthlyAnalysisChart';
+import socket from '../../services/socket';
 
 
 
@@ -15,7 +16,8 @@ export default function AnalyticsTab() {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const fetchMetrics = async () => {
+        const fetchMetrics = async (isBackgroundLoad = false) => {
+            if (!isBackgroundLoad) setIsLoading(true);
             try {
                 const token = localStorage.getItem('token');
                 const res = await axios.get('http://localhost:3000/api/analytics/metrics', {
@@ -31,7 +33,30 @@ export default function AnalyticsTab() {
                 setIsLoading(false);
             }
         };
+
         fetchMetrics();
+
+        // Socket listener for live metrics updates
+        const handleTicketActivity = () => {
+            // Trigger a silent background reload
+            fetchMetrics(true);
+        };
+
+        socket.on('ticketCreated', handleTicketActivity);
+        socket.on('ticketAssigned', handleTicketActivity);
+        socket.on('ticketApprovalRequested', handleTicketActivity);
+        socket.on('ticketApprovalSent', handleTicketActivity);
+        socket.on('ticketResolved', handleTicketActivity);
+        socket.on('ticketRejected', handleTicketActivity);
+
+        return () => {
+            socket.off('ticketCreated', handleTicketActivity);
+            socket.off('ticketAssigned', handleTicketActivity);
+            socket.off('ticketApprovalRequested', handleTicketActivity);
+            socket.off('ticketApprovalSent', handleTicketActivity);
+            socket.off('ticketResolved', handleTicketActivity);
+            socket.off('ticketRejected', handleTicketActivity);
+        };
     }, []);
 
     const MetricCard = ({ title, value, icon, colorClass }: any) => (

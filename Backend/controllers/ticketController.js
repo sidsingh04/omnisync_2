@@ -1,7 +1,9 @@
 // API's related to Tickets
-
+const mongoose = require("mongoose");
 const Ticket = require("../models/Tickets");
 const Agent = require("../models/Agent");
+const IdempotencyKey = require("../models/IdempotencyKey");
+const { getIO } = require("../socket");
 
 async function createTicket(req, res) {
     try {
@@ -25,10 +27,21 @@ async function createTicket(req, res) {
         });
         await ticket.save();
 
-        // Update agent status to 'Busy' if they aren't 'Offline'
+        // Update agent status to 'Busy' if they aren't 'Offline', and increment totalPending
+        agent.totalPending += 1;
         if (agent.status !== 'Offline') {
             agent.status = 'Busy';
-            await agent.save();
+        }
+        await agent.save();
+
+        try {
+            getIO().emit("ticketAssigned", {
+                ticket: ticket,
+                agentId: agent.agentId,
+                timestamp: new Date().toISOString()
+            });
+        } catch (socketErr) {
+            console.error("Socket emit error:", socketErr);
         }
 
         return res.json({ success: true, message: "Ticket created successfully" });
@@ -52,17 +65,176 @@ async function getTicketById(req, res) {
     }
 }
 
+
+
 async function updateTicket(req, res) {
-    try {
-        const { issueId, _id, __v, agentId, agent, ...updateFields } = req.body;
-        const ticket = await Ticket.findOneAndUpdate({ issueId }, { $set: updateFields }, { new: true, runValidators: true });
-        if (!ticket) {
-            return res.status(404).json({ success: false, message: "Ticket not found" });
+
+    const MAX_RETRIES = 3;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+
+        const session = await mongoose.startSession();
+
+        try {
+
+            session.startTransaction();
+
+            const { issueId, rejectedDate, ...updateFields } =
+                req.body;
+
+            const existingTicket =
+                await Ticket.findOne({ issueId })
+                    .session(session);
+
+            if (!existingTicket)
+                throw new Error("Ticket not found");
+
+            const previousStatus =
+                existingTicket.status;
+
+            // Prepare update object containing $set
+            const updateObj = { $set: updateFields };
+
+            // If the fronted sent a rejection date, push it into the array
+            if (rejectedDate) {
+                updateObj.$push = { rejectionHistory: new Date(rejectedDate) };
+            }
+
+            const ticket =
+                await Ticket.findOneAndUpdate(
+                    {
+                        issueId,
+                        status: previousStatus
+                    },
+                    updateObj,
+                    {
+                        new: true,
+                        session
+                    }
+                );
+
+            if (!ticket) {
+                await session.abortTransaction();
+                session.endSession();
+
+                return res.json({
+                    success: true,
+                    message:
+                        "Already processed"
+                });
+            }
+
+            /* ===== Aggregation Pipeline (Absolute Truth) ===== */
+            const aggregateStats = await Ticket.aggregate([
+                { $match: { agentId: ticket.agentId } },
+                {
+                    $group: {
+                        _id: null,
+                        totalPending: {
+                            $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] }
+                        },
+                        pendingApprovals: {
+                            $sum: { $cond: [{ $eq: ["$status", "approval"] }, 1, 0] }
+                        },
+                        totalResolved: {
+                            $sum: { $cond: [{ $eq: ["$status", "resolved"] }, 1, 0] }
+                        },
+                        successfulCalls: {
+                            $sum: { $cond: [{ $eq: ["$status", "resolved"] }, 1, 0] }
+                        },
+                        failedCalls: {
+                            $sum: { $size: { $ifNull: ["$rejectionHistory", []] } }
+                        },
+                        totalCallDuration: {
+                            $sum: "$callDuration"
+                        }
+                    }
+                }
+            ]).session(session);
+
+            const stats = aggregateStats[0] || {
+                totalPending: 0,
+                pendingApprovals: 0,
+                totalResolved: 0,
+                successfulCalls: 0,
+                failedCalls: 0,
+                totalCallDuration: 0
+            };
+
+            await Agent.findOneAndUpdate(
+                { agentId: ticket.agentId },
+                {
+                    $set: {
+                        totalPending: stats.totalPending,
+                        pendingApprovals: stats.pendingApprovals,
+                        totalResolved: stats.totalResolved,
+                        successfulCalls: stats.successfulCalls,
+                        failedCalls: stats.failedCalls,
+                        totalCallDuration: stats.totalCallDuration,
+                        status: stats.totalPending > 0 ? "Busy" : "Available"
+                    }
+                },
+                { session }
+            );
+
+            await session.commitTransaction();
+            session.endSession();
+
+            const io = getIO();
+
+            if (io) {
+                const payload = {
+                    ticket: ticket.toObject(),
+                    agentId: ticket.agentId,
+                    timestamp: new Date().toISOString()
+                };
+
+                if (previousStatus === 'pending' && ticket.status === 'approval') {
+                    io.emit("ticketApprovalSent", payload);
+                } else if (previousStatus === 'approval' && ticket.status === 'resolved') {
+                    io.emit("ticketResolved", payload);
+                } else if (previousStatus === 'approval' && ticket.status === 'pending') {
+                    io.emit("ticketRejected", payload);
+                } else {
+                    io.emit("ticketUpdated", payload);
+                }
+            }
+
+            const response = {
+                success: true,
+                message:
+                    "Ticket updated successfully"
+            };
+
+            if (req.idempotencyKey) {
+                await IdempotencyKey.create({
+                    key: req.idempotencyKey,
+                    response
+                });
+            }
+
+            return res.json(response);
+
+        } catch (err) {
+
+            await session.abortTransaction();
+            session.endSession();
+
+            if (
+                err.errorLabelSet?.has(
+                    "TransientTransactionError"
+                ) &&
+                attempt < MAX_RETRIES - 1
+            ) {
+                continue;
+            }
+
+            console.error(err);
+
+            return res.status(500).json({
+                success: false
+            });
         }
-        return res.json({ success: true, message: "Ticket updated successfully" });
-    } catch (error) {
-        console.error("Error updating ticket:", error);
-        return res.status(500).json({ success: false, message: "Internal server error" });
     }
 }
 
